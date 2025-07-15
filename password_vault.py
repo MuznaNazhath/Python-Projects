@@ -1,29 +1,17 @@
-# password_vault.py
-# └── Handles:
-#     ├── Master password check
-#     ├── Add new credentials
-#     ├── Retrieve credentials
-#     └── Encrypt/Decrypt data
-
+import os
+import hashlib
 from cryptography.fernet import Fernet
 
-# function to create a master key
-# This key is used to encrypt and decrypt the credentials
-# It generates a new key and saves it to a file named "key.key"
+# ---------- KEY FUNCTIONS (unchanged) ----------
 
 
 def write_key():
-    key = Fernet.generate_key()  # Generate a new key
-    # Save the key to a file
+    key = Fernet.generate_key()
     with open("key.key", "wb") as key_file:
         key_file.write(key)
 
-# ----- RUN THIS ONLY ONCE -----
+# Run below only once before using the vault or master password functionality
 # write_key()
-
-# Function to load the key from the file
-# This key is used for encryption and decryption of credentials
-
 
 def load_key():
     return open("key.key", "rb").read()
@@ -32,8 +20,35 @@ def load_key():
 key = load_key()
 fer = Fernet(key)
 
-# Function to add a new credential to the vault
-# It encrypts the password before saving it
+# master password functionality
+# -------------------------------------------------
+# This section allows the user to set and verify a master password.
+# The master password is stored as a SHA‑256 hash in a file named "master.hash".
+# The user must enter the correct master password to access the vault.
+MASTER_FILE = "master.hash"
+
+
+def set_master_password():
+    """Run once: ask user for a master password and save its SHA‑256 hash."""
+    master = input("Create a master password: ").strip()
+    hash_ = hashlib.sha256(master.encode()).hexdigest()
+    with open(MASTER_FILE, "w") as f:
+        f.write(hash_)
+    print("Master password set!  🔐")
+
+# run below only once to set the master password before using the vault
+# set_master_password()
+
+
+def verify_master_password():
+    """Prompt for master password and compare to stored hash."""
+    if not os.path.exists(MASTER_FILE):
+        set_master_password()
+
+    stored_hash = open(MASTER_FILE).read().strip()
+    attempt = input("Enter master password: ").strip()
+    return hashlib.sha256(attempt.encode()).hexdigest() == stored_hash
+# -------------------------------------------------
 
 
 def add():
@@ -46,25 +61,28 @@ def add():
         f.write(f"{name}|{user}|{encrypted_pwd}\n")
 
 
-# Function to view credentials from the vault
-# It decrypts the password before displaying it
 def view():
     try:
         with open("vault.txt", "r") as f:
             for line in f:
                 name, user, encrypted_pwd = line.strip().split("|")
-                decrypted_pwd = fer.decrypt(encrypted_pwd.encode()).decode()
-                print(f"{name} | {user} | {decrypted_pwd}")
+                try:
+                    decrypted_pwd = fer.decrypt(
+                        encrypted_pwd.encode()).decode()
+                    print(f"{name} | {user} | {decrypted_pwd}")
+                except Exception:
+                    print(f"{name} | {user} | [Could not decrypt]")
     except FileNotFoundError:
         print("No passwords saved yet.")
 
 
-# Main loop to interact with the user
-# It allows the user to add new credentials or view existing ones
-while True:
-    mode = input(
-        "\nWould you like to add a new password or view existing ones (add/view)? Press 'q' to quit: ").lower()
+# ---------- MAIN ----------
+if not verify_master_password():
+    print("❌  Incorrect master password. Exiting.")
+    exit()
 
+while True:
+    mode = input("\n(add/view) or 'q' to quit: ").lower()
     if mode == "q":
         break
     elif mode == "add":
